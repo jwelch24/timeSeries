@@ -176,7 +176,7 @@ class RecordManager:
     def addValue(self,record_name,value,time=None):
 
         if record_name not in self.records:
-            return 404
+            raise
         else:   
             self.records[record_name].add(value,time)
 
@@ -195,7 +195,7 @@ class RecordManager:
             if key.find(record_name) == 0:
                 del self.records[key]
             else:
-                print "no"
+                raise
 
     def listRecords(self,pattern=None):
         keys = []
@@ -216,7 +216,6 @@ if __name__ == '__main__':
     record_name = "record1"
     t_0 = time.time()
     t = t_0 - 360000
-
 
     count = 0
     while t < t_0:
