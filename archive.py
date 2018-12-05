@@ -24,9 +24,7 @@ class Record:
         self.data = []
 
         # Set the archive ranges. This can be configurable...
-
         total_record = 0
-
 
     def add(self,value,record_time=None):
 
@@ -123,19 +121,21 @@ class RecordManager:
     def __init__(self,archive_times=None):
         self.records = {}
         self.archive_times = []
+        self.lock = threading.Lock()
+
         if archive_times:
             self.archive_times = copy.deepcopy(archive_times)
         else:
             now = time.time()
-            self.archive_times.append([5*365*86400,30*365*86400,28*86400,"30year",now]) # Keep records once a month for 30 years
-            self.archive_times.append([180*86400,5*365*86400,7*86400,"5year",now]) # Keep records once a week for 5 years
-            self.archive_times.append([28*86400,180*86400,86400,"6month",now]) # Keep records once a day for 6 months
-            self.archive_times.append([7*86400,28*86400,21600,"month",now]) # Keep records once 6 hours for a month
-            self.archive_times.append([86400,86400*7,3600,"week",now]) # Keep records once an hour for a week
-            self.archive_times.append([3600,86400,900,"day",now]) # Keep records once 15 minute for a day
-            self.archive_times.append([900,3600,60,"hour",now]) # Keep records once a minute for an hour
-            self.archive_times.append([300,900,15,"15min",now]) # Keep records once 15 seconds for 15 minutes (360)
-            self.archive_times.append([0,300,1,"5min",now]) # Keep records once a second for 5 minutes (360)
+            self.archive_times.append([5*365*86400,30*365*86400,28*86400,"30year",now-30*86400]) # Keep records once a month for 30 years
+            self.archive_times.append([180*86400,5*365*86400,7*86400,"5year",now-30*86400]) # Keep records once a week for 5 years
+            self.archive_times.append([28*86400,180*86400,86400,"6month",now-30*86400]) # Keep records once a day for 6 months
+            self.archive_times.append([7*86400,28*86400,21600,"month",now-30*86400]) # Keep records once 6 hours for a month
+            self.archive_times.append([86400,86400*7,3600,"week",now-30*86400]) # Keep records once an hour for a week
+            self.archive_times.append([3600,86400,900,"day",now-30*86400]) # Keep records once 15 minute for a day
+            self.archive_times.append([900,3600,60,"hour",now-30*86400]) # Keep records once a minute for an hour
+            self.archive_times.append([300,900,15,"15min",now-30*86400]) # Keep records once 15 seconds for 15 minutes (360)
+            self.archive_times.append([0,300,1,"5min",now-30*86400]) # Keep records once a second for 5 minutes (360)
 
         threading.Thread(target=self.archive).start()
 
@@ -149,28 +149,23 @@ class RecordManager:
         while run:
             
             if time.time() > last_archive + archive_period:
-                print "Archiving"
                 last_archive = time.time()
 
                 for r in self.records:
                     new_archive_period = []
                     for a in self.archive_times:
-                        if time.time() - a[4] > (a[1]-a[0])/2:
+                        if time.time() - a[4] > 10*a[2]:
                             new_archive_period.append(a)
                             a[4] = time.time()
 
-                    self.records[r].archive(new_archive_period)
+                    if len(new_archive_period) > 0:
+                        with self.lock:
+                            self.records[r].archive(new_archive_period)
 
                 now = time.time()
-
-                print now - last_archive
-
                 times_run += 1
 
-                if times_run == 5:
-                    run = False
-
-            time.sleep(1)
+            time.sleep(5)
             
 
     def createRecord(self,record_name):
@@ -189,7 +184,10 @@ class RecordManager:
             self.records[record_name].add(value,time)
 
     def getRecord(self,record_name,t_0,t_1):
-        data , index = self.records[record_name].get(t_0,t_1)
+
+        with self.lock:
+            data , index = self.records[record_name].get(t_0,t_1)
+
         return copy.deepcopy(data)
 
     def deleteRecord(self,record_name):
@@ -217,6 +215,8 @@ class RecordManager:
 
         return copy.deepcopy(keys)
 
+
+
 if __name__ == '__main__':
 
     # Create a Record Manager
@@ -224,16 +224,14 @@ if __name__ == '__main__':
 
     record_name = "record1"
     t_0 = time.time()
-    t = t_0 - 360000
+    t = t_0 - 56432
 
     count = 0
+    manager.createRecord(record_name)
     while t < t_0:
         t += random.randint(0,2)
 
         rv = manager.addValue(record_name,random.randint(0,100),time=t)
-        if rv == 404:
-            manager.createRecord(record_name)
-            rv = manager.addValue(record_name,random.randint(0,100),time=t)
 
         count +=1
 
@@ -243,9 +241,10 @@ if __name__ == '__main__':
 
     new_data =  manager.getRecord(record_name,time.time()-360000,time.time())
 
+    print "Number of records {}".format(len(new_data))
     now = time.time()
-    #for d in new_data:
-    #    print d[0]-now,",",d[1],",",d[2],",",d[3],",",d[4]
+    for d in new_data:
+        print d[0]-now,",",d[1],",",d[2],",",d[3],",",d[4]
 
 
 
